@@ -1,4 +1,4 @@
-package Base_ARP;
+package Routing;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -62,7 +62,7 @@ public class EthernetLayer implements BaseLayer {
 		m_sHeader.enet_data = input;
 		
 		if(input[7] == 0x01 || input[7] == 0x02) {
-			// Opcode 0x0001
+			// Opcode 0x0001 or 0x0002
 			// ARP Request or Reply Message => Protocol Type 0x0806
 			m_sHeader.enet_type[0] = (byte) 0x08;
 			m_sHeader.enet_type[1] = (byte) 0x06;

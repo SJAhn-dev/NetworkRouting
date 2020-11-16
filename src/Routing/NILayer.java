@@ -1,4 +1,4 @@
-package Base_ARP;
+package Routing;
 
 import java.nio.ByteBuffer;
 import java.sql.Date;
@@ -53,6 +53,7 @@ public class NILayer implements BaseLayer {
 
 	public void SetAdapterList() {
 		int r = Pcap.findAllDevs(m_pAdapterList, errbuf);
+		System.out.println(r);
 		if (r == Pcap.NOT_OK || m_pAdapterList.isEmpty()) {
 			System.err.printf("Can't read list of devices, error is %s", errbuf.toString());
 			return;

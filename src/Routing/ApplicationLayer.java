@@ -1,4 +1,4 @@
-package Base_ARP;
+package Routing;
 
 import java.awt.Color;
 import java.awt.Container;
@@ -14,8 +14,8 @@ import java.util.regex.Pattern;
 import javax.swing.*;
 import javax.swing.border.*;
 
-import Base_ARP.ARPLayer._ARPCache_Entry;
-import Base_ARP.ARPLayer._Proxy_Entry;;
+import Routing.ARPLayer._ARPCache_Entry;
+import Routing.ARPLayer._Proxy_Entry;;
 
 public class ApplicationLayer extends JFrame implements BaseLayer {
 	public int nUpperLayerCount = 0;
@@ -87,8 +87,6 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 	static Runnable updater = () -> {
 		while(true) {
 			try {
-				// 연산 부담을 줄이기 위해
-				// 2초 sleep을 걸어주어 2초마다 updateGUI 함수 실행
 				Thread.sleep(1000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
@@ -148,6 +146,7 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 				_ARPCache_Table.clear(); // ARPCache_Table clear 해준다 
 			}
 			if (e.getSource() == Btn_ARPSend) {
+				System.out.println(11);
 				String ip_input = TF_IPAddress.getText();
 				if(ipValidationCheck(ip_input)) {
 					((ARPLayer) m_LayerMgr.GetLayer("ARP")).targetIpInput = ip_input;
@@ -318,7 +317,7 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 		Panel_HWAddress.setLayout(null);
 
 		TF_HWAddress = new JTextField();
-		TF_HWAddress.setBounds(0, 0, 180, 25);// 249
+		TF_HWAddress.setBounds(0, 0, 180, 25);
 		Panel_HWAddress.add(TF_HWAddress);
 		TF_HWAddress.setHorizontalAlignment(SwingConstants.CENTER);
 		TF_HWAddress.setColumns(10);
