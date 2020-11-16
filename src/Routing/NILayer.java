@@ -40,6 +40,13 @@ public class NILayer implements BaseLayer {
 		int timeout = 10 * 1000; // 10 seconds in millis
 		m_AdapterObject = Pcap.openLive(m_pAdapterList.get(m_iNumAdapter).getName(), snaplen, flags, timeout, errbuf);
 	}
+	
+	public void InitializeAdapter() {
+		for (int i = 0; i < m_pAdapterList.size(); i++) {
+			SetAdapterNumber(i);
+		}
+	}
+
 
 	public PcapIf GetAdapterObject(int iIndex) {
 		return m_pAdapterList.get(iIndex);

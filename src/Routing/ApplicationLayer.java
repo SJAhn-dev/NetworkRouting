@@ -63,12 +63,12 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 	static int proxyCount = 0;
 	
 	public static void main(String[] args) throws UnknownHostException {
+		m_LayerMgr.AddLayer(new ApplicationLayer("GUI"));
 		m_LayerMgr.AddLayer(new ARPLayer("ARP"));
 		m_LayerMgr.AddLayer(new EthernetLayer("ETHERNET"));
 		m_LayerMgr.AddLayer(new NILayer("NI"));
 		m_LayerMgr.AddLayer(new IPLayer("IP"));
-		m_LayerMgr.AddLayer(new TCPLayer("TCP"));
-		m_LayerMgr.AddLayer(new ApplicationLayer("GUI"));
+		
 		
 		m_LayerMgr.ConnectLayers(" NI ( *ETHERNET ( *ARP +IP ( -ARP *TCP ( *GUI ) ) ) )");
 		((NILayer) m_LayerMgr.GetLayer("NI")).SetAdapterNumber(0);
@@ -150,7 +150,6 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 				String ip_input = TF_IPAddress.getText();
 				if(ipValidationCheck(ip_input)) {
 					((ARPLayer) m_LayerMgr.GetLayer("ARP")).targetIpInput = ip_input;
-					((TCPLayer) m_LayerMgr.GetLayer("TCP")).Send(null, 0);
 				} else {
 					System.out.println("유효하지 않은 IP 입력입니다 : " + ip_input);
 				}
