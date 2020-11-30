@@ -6,6 +6,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Vector;
 import javax.swing.*;
@@ -16,13 +18,17 @@ import org.jnetpcap.PcapIf;
 
 import Routing.ARPLayer._ARPCache_Entry;
 import Routing.ARPLayer._Proxy_Entry;
+import Routing.RoutingTable;
 
 public class RoutingDlg extends JFrame implements BaseLayer {
 	public int nUpperLayerCount = 0;
 	public String pLayerName = null;
 	public BaseLayer p_UnderLayer = null;
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
-	private static LayerManager m_LayerMgr = new LayerManager();	
+	private static LayerManager m_LayerMgr = new LayerManager();
+	
+	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table1;
+	static Hashtable<String, _Proxy_Entry> _Proxy_Table;
 	
 	DefaultTableModel RoutingTableModel;
 	Vector<String> RoutingTableColumns = new Vector<String>();
@@ -36,9 +42,9 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 	Vector<String> ProxyTableColumns = new Vector<String>();
 	Vector<String> ProxyTableRows = new Vector<String>();
 	
-	JTable RoutingTable;
+	JTable StaticRoutingTable;
 	JTable ARPCacheTable;
-	JTable proxyARPTable;
+	JTable ProxyTable;
 	
 	// Main Interface
 	Container Main_contentPane;
@@ -78,10 +84,102 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		m_LayerMgr.AddLayer(new IPLayer("IP"));
 		
 		m_LayerMgr.ConnectLayers(" NI ( *ETHERNET ( *ARP +IP ( *GUI ) ) )");
+		m_LayerMgr.GetLayer("IP").SetUnderLayer(m_LayerMgr.GetLayer("ARP"));
 		((NILayer) m_LayerMgr.GetLayer("NI")).InitializeAdapter();
 
 	}
 	
+	public synchronized void updateARPTableRow(String[] input) {
+		ARPTableRows = new Vector<String>();
+		ARPTableRows.addElement(input[0]);
+		ARPTableRows.addElement(input[1]);
+		ARPTableRows.addElement(input[2]);
+		ARPTableRows.addElement(input[3]);
+		ARPTableModel.addRow(ARPTableRows);
+	}
+	
+	public synchronized void updateProxyTableRow(String[] value) {
+		ProxyTableRows = new Vector<String>();
+		ProxyTableRows.addElement(value[0]);
+		ProxyTableRows.addElement(value[1]);
+		ProxyTableRows.addElement(value[2]);
+		ProxyTableModel.addRow(ProxyTableRows);
+	}
+	
+	public synchronized void updateRoutingTableRow(String[] input) {
+		RoutingTableRows = new Vector<String>();
+		RoutingTableRows.addElement(input[0]);
+		RoutingTableRows.addElement(input[1]);
+		RoutingTableRows.addElement(input[2]);
+		RoutingTableRows.addElement(input[3]);
+		RoutingTableRows.addElement(input[4]);
+		RoutingTableRows.addElement(input[5]);
+		RoutingTableModel.addRow(RoutingTableRows);
+	}
+	
+	public synchronized void removeARPCacheTableRow(String addr) {
+		for(int i = 0; i < ARPTableModel.getRowCount(); i++) {
+			if(ARPTableModel.getValueAt(i, 0).toString().equals(addr)) {
+				ARPTableModel.removeRow(i); 
+				break;
+			}
+		}
+	}
+	
+	class buttonEventListener implements ActionListener {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			if (e.getSource() == Main_RoutingTableAddButton) {
+				RouteAddFrame();
+			}
+			if (e.getSource() == Main_RoutingTableDeleteButton) {
+				int targetIdx = StaticRoutingTable.getSelectedRow();
+				String targetKey = (String) RoutingTableModel.getValueAt(targetIdx, 0);
+				RoutingTableModel.removeRow(targetIdx);
+				RoutingTable.removeEntryFromRoutingTable(targetKey);
+			}
+			if (e.getSource() == Main_ARPDeleteButton) {
+				int targetIdx = ARPCacheTable.getSelectedRow();
+				String targetKey = (String) ARPTableModel.getValueAt(targetIdx, 0);
+				ARPTableModel.removeRow(targetIdx);
+				_ARPCache_Table1.remove(targetKey);
+			}
+			if (e.getSource() == Main_ProxyAddButton) {
+				ProxyAddFrame();
+			}
+			if (e.getSource() == Main_ProxyDeleteButton) {
+				int targetIdx = ProxyTable.getSelectedRow();
+				String targetKey = (String) ProxyTableModel.getValueAt(targetIdx, 0);
+				ProxyTableModel.removeRow(targetIdx);
+				_Proxy_Table.remove(targetKey);
+			}
+			if (e.getSource() == Route_AddButton) {
+				String[] input = new String[6];
+				input[0] = Route_DstField.getText();
+				input[1] = Route_NetmaskField.getText();
+				input[2] = Route_GatewayField.getText();
+				input[3] = "";
+				if(Route_UpCheckBox.isSelected()) { input[3] += "U"; }
+				if(Route_GatewayCheckBox.isSelected()) { input[3] += "G"; }
+				if(Route_HostCheckBox.isSelected()) { input[3] += "H"; }
+				input[4] = Integer.toString(Route_InterfaceComboBox.getSelectedIndex());
+				input[5] = "1";
+				RoutingTable.addToRoutingTable(input);
+				updateRoutingTableRow(input);
+				Route_RouteAddFrame.dispose();
+			}
+			if (e.getSource() == Route_CancelButton) {
+				Route_RouteAddFrame.dispose();
+			}
+			if (e.getSource() == Proxy_AddButton) {
+				
+			}
+			if (e.getSource() == Proxy_CancelButton) {
+				Proxy_ProxyAddFrame.dispose();
+			}
+		}
+	}
+		
 	public RoutingDlg(String pName) throws SocketException {
 		pLayerName = pName;
 		
@@ -123,11 +221,11 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Main_contentPane.add(staticRoutingPanel);
 		staticRoutingPanel.setLayout(null);
 
-		RoutingTable = new JTable(RoutingTableModel);
-		RoutingTable.setBounds(0, 0, 580, 365);
-		RoutingTable.setShowGrid(false);
+		StaticRoutingTable = new JTable(RoutingTableModel);
+		StaticRoutingTable.setBounds(0, 0, 580, 365);
+		StaticRoutingTable.setShowGrid(false);
 
-		JScrollPane RoutingTableScrollPane = new JScrollPane(RoutingTable);
+		JScrollPane RoutingTableScrollPane = new JScrollPane(StaticRoutingTable);
 		RoutingTableScrollPane.setBounds(10, 15, 580, 365);
 		staticRoutingPanel.add(RoutingTableScrollPane);
 		
@@ -172,11 +270,11 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Main_contentPane.add(ProxyARPPanel);
 		ProxyARPPanel.setLayout(null);
 		
-		proxyARPTable = new JTable(ProxyTableModel);
-		proxyARPTable.setBounds(0, 0, 580, 355);
-		proxyARPTable.setShowGrid(false);
+		ProxyTable = new JTable(ProxyTableModel);
+		ProxyTable.setBounds(0, 0, 580, 355);
+		ProxyTable.setShowGrid(false);
 
-		JScrollPane ProxyTableScrollPane = new JScrollPane(proxyARPTable);
+		JScrollPane ProxyTableScrollPane = new JScrollPane(ProxyTable);
 		ProxyTableScrollPane.setBounds(10, 15, 430, 150);
 		ProxyARPPanel.add(ProxyTableScrollPane);
 		
@@ -193,39 +291,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		setVisible(true);
 	}
 	
-	class buttonEventListener implements ActionListener {
-		@Override
-		public void actionPerformed(ActionEvent e) {
-			if (e.getSource() == Main_RoutingTableAddButton) {
-				RouteAddFrame();
-			}
-			if (e.getSource() == Main_RoutingTableDeleteButton) {
-				
-			}
-			if (e.getSource() == Main_ARPDeleteButton) {
-				
-			}
-			if (e.getSource() == Main_ProxyAddButton) {
-				ProxyAddFrame();
-			}
-			if (e.getSource() == Main_ProxyDeleteButton) {
-				
-			}
-			if (e.getSource() == Route_AddButton) {
-				
-			}
-			if (e.getSource() == Route_CancelButton) {
-				
-			}
-			if (e.getSource() == Proxy_AddButton) {
-				
-			}
-			if (e.getSource() == Proxy_CancelButton) {
-				
-			}
-		}
-	}
-		
 	public void RouteAddFrame() {
 		Route_RouteAddFrame = new JFrame("Static Route Add");
 		Route_RouteAddFrame.setBounds(250, 250, 400, 300);
@@ -355,10 +420,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Proxy_CancelButton.setBounds(210, 210, 80, 30);
 		Proxy_CancelButton.addActionListener(new buttonEventListener());
 		Proxy_ContentPane.add(Proxy_CancelButton);
-		
 	}
-	
-
 	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {
