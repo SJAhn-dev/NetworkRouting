@@ -1,10 +1,7 @@
 package Routing;
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
+import Routing.NILayer;
 
 public class EthernetLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
@@ -13,7 +10,7 @@ public class EthernetLayer implements BaseLayer {
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
 	_ETHERNET_HEADER m_sHeader = new _ETHERNET_HEADER(); // ethernet header생성자
-	static byte[] myEnetAddress;
+	static byte[][] myEnetAddress;
 
 	private class _ETHERNET_ADDR {
 		private byte[] addr = new byte[6];
@@ -46,18 +43,18 @@ public class EthernetLayer implements BaseLayer {
 		// super(pName);
 		pLayerName = pName;
 		ResetHeader();
-		try {
-			myEnetAddress = getLocalMacAddress();
-		} catch (UnknownHostException | SocketException e) {
-			e.printStackTrace();
-		}
+		
+		String port0_mac = NILayer.getMacAddress(0);
+		String port1_mac = NILayer.getMacAddress(1);
+		myEnetAddress[0] = Translator.macToByte(port0_mac);
+		myEnetAddress[1] = Translator.macToByte(port1_mac);
 	}
 		
 	private void ResetHeader() {
 		m_sHeader = new _ETHERNET_HEADER();
 	}
 
-	public boolean Send(byte[] input, int length) {
+	public boolean Send(byte[] input, int length, int portNum) {
 		byte[] bytes;
 		m_sHeader.enet_data = input;
 		
@@ -77,13 +74,13 @@ public class EthernetLayer implements BaseLayer {
 		setEthernetHeader(input);
 		bytes = ObjToByte(m_sHeader, input, input.length);
 		
-		if(this.GetUnderLayer().Send(bytes, bytes.length))
+		if(this.GetUnderLayer().Send(bytes, bytes.length, portNum))
 			return true;
 		else
 			return false;
 	}
 	
-	public boolean Receive(byte[] input) {
+	public boolean Receive(byte[] input, int portNum) {
 		byte[] buf;
 		
 		// Target이 자신도 아니고 BroadCast도 아닌 경우 drop
@@ -93,12 +90,12 @@ public class EthernetLayer implements BaseLayer {
 		if (input[12] == 0x08 && input[13] == 0x06) {
 			// Receive한 Message가 ARP Message인 경우
 			buf = removeEthernetHeader(input, input.length);
-			this.GetUpperLayer(0).Receive(buf);
+			this.GetUpperLayer(0).Receive(buf, portNum);
 		}
 		else if (input[12] == 0x08 && input[13] == 0x00) {
 			// ARP Message 아닌 경우 IPLayer로 올린다
 			buf = removeEthernetHeader(input, input.length);
-			this.GetUpperLayer(1).Receive(buf);
+			this.GetUpperLayer(1).Receive(buf, portNum);
 		}
 		else
 			return false;
@@ -110,7 +107,7 @@ public class EthernetLayer implements BaseLayer {
 	public void setEthernetHeader(byte[] input) {
 		System.arraycopy(input, 8, m_sHeader.enet_srcaddr.addr, 0, 6);
 		System.arraycopy(input, 18, m_sHeader.enet_dstaddr.addr, 0, 6);
-	}	
+	}
 	
 	// Ethernet Header를 Packet에서 제거해주는 함수
 	private byte[] removeEthernetHeader(byte[] input, int length) {
@@ -125,11 +122,15 @@ public class EthernetLayer implements BaseLayer {
 	
 	// Receive한 Packet의 Dst Address가 자신인지 확인하는 함수
 	private boolean isTargetMe(byte[] input) {
-		for(int idx = 0; idx < 6; idx++) {
-			if(input[idx] != myEnetAddress[idx])
-				return false;
+		for(int size = 0; size < myEnetAddress.length; size++) {
+			boolean targetMe = true;
+			for(int idx = 0; idx < 6; idx++) {
+				if(input[idx] != myEnetAddress[size][idx])
+					targetMe = false;
+			}
+			if(targetMe) { return true; }
 		}
-		return true;
+		return false;
 	}
 	
 	// Receive한 Packet이 BroadCast인지 확인하는 함수
@@ -147,22 +148,10 @@ public class EthernetLayer implements BaseLayer {
 		System.arraycopy(Header.enet_dstaddr.addr, 0, buf, 0, 6);
 		System.arraycopy(Header.enet_srcaddr.addr, 0, buf, 6, 6);
 		System.arraycopy(Header.enet_type, 0, buf, 12, 2);
-
 		System.arraycopy(input, 0, buf, 14, length);
 
 		return buf;
 	}
-	
-	// Local Mac Address 가져오는 함수
-	 public byte[] getLocalMacAddress() throws UnknownHostException, SocketException {
-			InetAddress ip;
-
-			ip = InetAddress.getLocalHost();
-			NetworkInterface network = NetworkInterface.getByInetAddress(ip);
-			byte[] mac = network.getHardwareAddress();
-			
-			return mac;
-	 }
 
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {

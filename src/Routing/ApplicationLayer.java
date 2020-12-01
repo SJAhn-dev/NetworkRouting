@@ -163,7 +163,7 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 							List_Proxy.getSelectedValue().toString().trim(), " ");
 					st.nextToken();
 					String ip = st.nextToken();
-					((ARPLayer) m_LayerMgr.GetLayer("ARP")).deleteProxy(ip);
+//					((ARPLayer) m_LayerMgr.GetLayer("ARP")).deleteProxy(ip);
 					//updateProxyGUI();
 					Frame_ProxyAddPopup.dispose();
 				}
