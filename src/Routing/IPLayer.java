@@ -10,8 +10,8 @@ public class IPLayer implements BaseLayer{
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
 	_IP_HEADER m_sHeader;
-	public byte[][] myIpAddress;
-	public byte[][] myMacAddress;
+	public byte[][] myIpAddress = new byte[2][4];
+	public byte[][] myMacAddress = new byte[2][6];
 	public static ArrayList<_Routing_Entry> _Routing_Table = new ArrayList<>();
 	
 	private class _IP_ADDR {
@@ -87,8 +87,8 @@ public class IPLayer implements BaseLayer{
 		
 		String port0_ip = NILayer.getIpAddress(0);
 		String port1_ip = NILayer.getIpAddress(1);
-		myIpAddress[0] = Translator.macToByte(port0_ip);
-		myIpAddress[1] = Translator.macToByte(port1_ip);
+		myIpAddress[0] = Translator.ipToByte(port0_ip);
+		myIpAddress[1] = Translator.ipToByte(port1_ip);
 	}
 	
 	private byte[] ObjToByte(_IP_HEADER Header, byte[] input, int length) {
@@ -130,10 +130,11 @@ public class IPLayer implements BaseLayer{
 		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length, portNum);
 	}
 	
-	public boolean Receive(byte[] input, int length, int portNum) {
+	public boolean Receive(byte[] input, int portNum) {
 		byte[] dstIp = new byte[4];
 		System.arraycopy(input, 16, dstIp, 0, 4);
 		String dstIpStr = Translator.ipToString(dstIp);
+		//System.out.println("IPLayer" + dstIpStr);
 		
 		// Routing Table 탐색
 		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
@@ -150,9 +151,10 @@ public class IPLayer implements BaseLayer{
 					nextAddress = temp.gateway;
 				}
 			}
-			// 다음 목적지 (nextHop) 찾았을 시 해당 hop와 연결된 gateway로 packet 전송
+			// 다음 목적지 (nextHop) 찾았을 시 해당 hop와 연결된 gatewecay로 packet 전송
 			if(nextAddress != null) {
-				this.GetUnderLayer().Send(input, length, temp.routing_interface);
+				//System.out.println("IPLayer2" + input.length);
+				this.GetUnderLayer().Send(input, input.length, temp.routing_interface);
 				return true;
 			}
 		}

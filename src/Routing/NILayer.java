@@ -26,7 +26,6 @@ public class NILayer implements BaseLayer {
 	public NILayer(String pName) {
 		// super(pName);
 		pLayerName = pName;
-
 		m_pAdapterList = new ArrayList<PcapIf>();
 		m_iNumAdapter = 0;
 		SetAdapterList();
@@ -79,7 +78,6 @@ public class NILayer implements BaseLayer {
 	}
 
 	public boolean Send(byte[] input, int length, int portNum) {
-		
 		ByteBuffer buf = ByteBuffer.wrap(input);
 		if (m_AdapterObject.get(portNum).sendPacket(buf) != Pcap.OK) {
 			System.err.println(m_AdapterObject.get(portNum).getErr());

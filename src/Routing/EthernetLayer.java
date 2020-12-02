@@ -1,7 +1,10 @@
 package Routing;
 
 import java.util.ArrayList;
+import java.util.Hashtable;
+
 import Routing.NILayer;
+import Routing.ARPLayer._ARPCache_Entry;
 
 public class EthernetLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
@@ -10,7 +13,8 @@ public class EthernetLayer implements BaseLayer {
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
 	_ETHERNET_HEADER m_sHeader = new _ETHERNET_HEADER(); // ethernet header생성자
-	static byte[][] myEnetAddress;
+	static byte[][] myEnetAddress = new byte[2][6];
+	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table;
 
 	private class _ETHERNET_ADDR {
 		private byte[] addr = new byte[6];
@@ -58,24 +62,21 @@ public class EthernetLayer implements BaseLayer {
 
 	public boolean Send(byte[] input, int length, int portNum) {
 		byte[] bytes;
-		m_sHeader.enet_data = input;
+		_ETHERNET_HEADER packet = new _ETHERNET_HEADER();
+		packet.enet_data = input;
 		
 		if(input[7] == 0x01 || input[7] == 0x02) {
 			// Opcode 0x0001 or 0x0002
-			// ARP Request or Reply Message => Protocol Type 0x0806
-			m_sHeader.enet_type[0] = (byte) 0x08;
-			m_sHeader.enet_type[1] = (byte) 0x06;
+			packet.enet_type[0] = (byte) 0x08;
+			packet.enet_type[1] = (byte) 0x06;
+			setEthernetHeader(packet, input);
 		}
 		else {
 			// Opcode 0x0000
-			// Normal Data Message => Protocol Type 0x0800
-			m_sHeader.enet_type[0] = (byte) 0x08;
-			m_sHeader.enet_type[1] = (byte) 0x00;
+			packet.enet_type[0] = (byte) 0x08;
+			packet.enet_type[1] = (byte) 0x00;
 		}
-		
-		setEthernetHeader(input);
-		bytes = ObjToByte(m_sHeader, input, input.length);
-		
+		bytes = ObjToByte(packet, input, input.length);
 		if(this.GetUnderLayer().Send(bytes, bytes.length, portNum))
 			return true;
 		else
@@ -85,7 +86,7 @@ public class EthernetLayer implements BaseLayer {
 	public boolean Receive(byte[] input, int portNum) {
 		byte[] buf;
 		
-		// Target이 자신도 아니고 BroadCast도 아닌 경우 drop
+		// Target이 자신도 아니고 BroadCast도 아닌 경우 drop		
 		if(!isTargetMe(input) && !isBroadCast(input)) 
 			return false;
 		
@@ -97,7 +98,7 @@ public class EthernetLayer implements BaseLayer {
 		else if (input[12] == 0x08 && input[13] == 0x00) {
 			// ARP Message 아닌 경우 IPLayer로 올린다
 			buf = removeEthernetHeader(input, input.length);
-			this.GetUpperLayer(1).Receive(buf, portNum);
+			GetUpperLayer(1).Receive(buf, portNum);
 		}
 		else
 			return false;
@@ -105,10 +106,9 @@ public class EthernetLayer implements BaseLayer {
 		return true;
 	}
 	
-	// EthernetHeader 의 Addr을 ARP Header의 주소로 채운다
-	public void setEthernetHeader(byte[] input) {
-		System.arraycopy(input, 8, m_sHeader.enet_srcaddr.addr, 0, 6);
-		System.arraycopy(input, 18, m_sHeader.enet_dstaddr.addr, 0, 6);
+	public void setEthernetHeader(_ETHERNET_HEADER header, byte[] input) {
+		System.arraycopy(input, 8, header.enet_srcaddr.addr, 0, 6);
+		System.arraycopy(input, 18, header.enet_dstaddr.addr, 0, 6);
 	}
 	
 	// Ethernet Header를 Packet에서 제거해주는 함수
@@ -120,7 +120,7 @@ public class EthernetLayer implements BaseLayer {
 		}
 		
 		return buf;
-	}
+	}	
 	
 	// Receive한 Packet의 Dst Address가 자신인지 확인하는 함수
 	private boolean isTargetMe(byte[] input) {
