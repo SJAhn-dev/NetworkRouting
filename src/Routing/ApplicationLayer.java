@@ -6,7 +6,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
 import java.util.regex.Pattern;
@@ -78,24 +77,25 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 		_Proxy_Table = ((ARPLayer) m_LayerMgr.GetLayer("ARP"))._Proxy_Table;		
 		
 		// Thread에 updater를 넣어 시작
-		Thread updaterThread = new Thread(updater, "updaterThread");
-		updaterThread.start();
+//		Thread updaterThread = new Thread(updater, "updaterThread");
+//		updaterThread.start();
 
 	}
 	
 	// CacheTable GUI를 지속적으로 Update하는 Runnable updater
-	static Runnable updater = () -> {
-		while(true) {
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			updateGUI();
-		}
-	};
+//	static Runnable updater = () -> {
+//		while(true) {
+//			try {
+//				Thread.sleep(1000);
+//			} catch (InterruptedException e) {
+//				e.printStackTrace();
+//			}
+//			updateGUI();
+//		}
+//	};
 	
 	// ARPCache Table의 Element를 가져와 GUI를 Update하는 함수
+	/*
 	public static void updateGUI() {
 		Enumeration<String> arpKeys = _ARPCache_Table.keys();
 		ListModel_ARPCache.removeAllElements();
@@ -122,7 +122,7 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 			String model = String.format("%18s%20s%23s", tempEntry.hostName, ipKey, macAddress);
 			ListModel_Proxy.addElement(model);
 		}
-	}
+	}*/
 	
 	// Button EventListener 부분
 	class btnClickEvent implements ActionListener {
@@ -163,8 +163,8 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 							List_Proxy.getSelectedValue().toString().trim(), " ");
 					st.nextToken();
 					String ip = st.nextToken();
-					((ARPLayer) m_LayerMgr.GetLayer("ARP")).deleteProxy(ip);
-					updateProxyGUI();
+//					((ARPLayer) m_LayerMgr.GetLayer("ARP")).deleteProxy(ip);
+					//updateProxyGUI();
 					Frame_ProxyAddPopup.dispose();
 				}
 			}
@@ -182,7 +182,7 @@ public class ApplicationLayer extends JFrame implements BaseLayer {
 				((ARPLayer) m_LayerMgr.GetLayer("ARP")).
 				addProxy(TF_ProxyIPAddress.getText(), TF_ProxyMacAddress.getText(), 
 						ComboBox_Device.getSelectedItem().toString());
-				updateProxyGUI();
+				//updateProxyGUI();
 				Frame_ProxyAddPopup.dispose();
 				proxyCount++;
 			}

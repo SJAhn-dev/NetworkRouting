@@ -39,4 +39,12 @@ interface BaseLayer {
 		return false;
 	}
 
+	public default boolean Receive(byte[] data, int portNum) {
+		return false;
+	}
+
+	public default boolean Send(byte[] bytes, int length, int portNum) {
+		return false;
+	}
+
 }

@@ -2,3 +2,11 @@
 .settings/
 .classpath
 .project
+src/vs/AddressTranslator.java
+src/vs/ARPLayer.java
+src/vs/BaseLayer.java
+src/vs/Dlg.java
+src/vs/EthernetLayer.java
+src/vs/IPLayer.java
+src/vs/LayerManager.java
+src/vs/NILayer.java

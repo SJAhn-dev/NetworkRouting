@@ -2,6 +2,7 @@ package Routing;
 
 import java.util.ArrayList;
 
+
 public class IPLayer implements BaseLayer{
 	public int nUpperLayerCount = 0;
 	public String pLayerName = null;
@@ -9,28 +10,35 @@ public class IPLayer implements BaseLayer{
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
 	_IP_HEADER m_sHeader;
+	public byte[][] myIpAddress;
+	public byte[][] myMacAddress;
+	public static ArrayList<_Routing_Entry> _Routing_Table = new ArrayList<>();
 	
 	private class _IP_ADDR {
 		private byte[] addr = new byte[4];
-		
 		public _IP_ADDR() {
 			this.addr[0] = (byte) 0x00;
 			this.addr[1] = (byte) 0x00;
 			this.addr[2] = (byte) 0x00;
 			this.addr[3] = (byte) 0x00;
 		}
+	}
+	
+	public static class _Routing_Entry {
+		String dst;
+		String netmask;
+		String gateway;
+		String flag;
+		int routing_interface;
+		String metric;
 		
-		@Override
-		public String toString() {
-			String ipAddress = "";
-			
-			// addr에 가지고있는 byte를 가져와 Integer로 변환 후 .을 더함
-			for (byte b : this.addr) {
-				ipAddress += Integer.toString(b & 0xFF) + ".";
-			}
-			
-			// 마지막에 붙은 "."은 제거하여 return
-			return ipAddress.substring(0, ipAddress.length() - 1);
+		public _Routing_Entry(String[] input) {
+			this.dst = input[0];
+			this.netmask = input[1];
+			this.gateway = input[2];
+			this.flag = input[3];
+			this.routing_interface = Integer.parseInt(input[4]);
+			this.metric = input[5];
 		}
 	}
 	
@@ -71,9 +79,20 @@ public class IPLayer implements BaseLayer{
 		ResetHeader();
 	}
 	
+	public void initAddress() {
+		String port0_mac = NILayer.getMacAddress(0);
+		String port1_mac = NILayer.getMacAddress(1);
+		myMacAddress[0] = Translator.macToByte(port0_mac);
+		myMacAddress[1] = Translator.macToByte(port1_mac);
+		
+		String port0_ip = NILayer.getIpAddress(0);
+		String port1_ip = NILayer.getIpAddress(1);
+		myIpAddress[0] = Translator.macToByte(port0_ip);
+		myIpAddress[1] = Translator.macToByte(port1_ip);
+	}
+	
 	private byte[] ObjToByte(_IP_HEADER Header, byte[] input, int length) {
 		byte[] buf = new byte[20 + length];
-		
 		buf[0] = Header.ip_verlen;
 		buf[1] = Header.ip_tos;
 		System.arraycopy(Header.ip_len, 0, buf, 2, 2);
@@ -84,23 +103,89 @@ public class IPLayer implements BaseLayer{
 		System.arraycopy(Header.ip_cksum, 0, buf, 10, 2);
 		System.arraycopy(Header.ip_src.addr, 0, buf, 12, 4);
 		System.arraycopy(Header.ip_dst.addr, 0, buf, 16, 4);
-		
 		System.arraycopy(input, 0, buf, 20, length);
 		
 		return buf;
 	}
 	
-	public boolean Send(byte[] input, int length) {
-		byte[] _IP_FRAME = ObjToByte(m_sHeader, input, input.length);
-		
-		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length);
+	// String 배열을 받아 Routing Table에 put하는 함수
+	public void addToRoutingTable(String[] input) {
+		_Routing_Entry entry = new _Routing_Entry(input);
+		_Routing_Table.add(entry);
 	}
 	
-	public boolean Receive(byte[] input, int length) {
+	// targetKey를 받아 Routing Table에서 해당 데이터를 지우는 함수
+	public void removeEntryFromRoutingTable(String targetKey) {
+		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
+			_Routing_Entry temp = _Routing_Table.get(idx);
+			if(temp.dst.equals(targetKey)) {
+				_Routing_Table.remove(idx);
+				return;
+			}
+		}
+	}
+	
+	public boolean Send(byte[] input, int length, int portNum) {
+		byte[] _IP_FRAME = ObjToByte(m_sHeader, input, input.length);
+		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length, portNum);
+	}
+	
+	public boolean Receive(byte[] input, int length, int portNum) {
+		byte[] dstIp = new byte[4];
+		System.arraycopy(input, 16, dstIp, 0, 4);
+		String dstIpStr = Translator.ipToString(dstIp);
 		
-		// 기본 구현에서는 TCP와 IP Layer의 Receive가 동작하지 않음
+		// Routing Table 탐색
+		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
+			_Routing_Entry temp = _Routing_Table.get(idx);
+			String dstMasking = netMask(dstIpStr, temp.netmask);
+			String nextAddress = null;
+			
+			// Destionation IP에 Masking한 Ip와 Table의 Ip가 동일한 경우 -> Gateway 존재
+			if(temp.dst.equals(dstMasking)) {
+				if(temp.flag.equals("U")) {
+					nextAddress = dstIpStr;
+				}
+				else if (temp.flag.equals("UG")) {
+					nextAddress = temp.gateway;
+				}
+			}
+			// 다음 목적지 (nextHop) 찾았을 시 해당 hop와 연결된 gateway로 packet 전송
+			if(nextAddress != null) {
+				this.GetUnderLayer().Send(input, length, temp.routing_interface);
+				return true;
+			}
+		}
 		
-		return true;
+		return false;
+	}
+	
+	public static String nextHopAddress(String dst) {
+		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
+			_Routing_Entry temp = _Routing_Table.get(idx);
+			String dstMasking = netMask(dst, temp.netmask);
+			if(temp.dst.equals(dstMasking)) {
+				if(temp.flag.equals("U")) {
+					return dst;
+				}
+				else if (temp.flag.equals("UG")) {
+					return temp.gateway;
+				}
+			}
+		}
+		return null;
+	}
+	
+	public static String netMask(String input, String mask) {
+		byte[] inputByte = Translator.ipToByte(input);
+		byte[] maskByte = Translator.ipToByte(mask);
+		
+		byte[] masking = new byte[4];
+		for(int idx = 0; idx < 4; idx++) {
+			masking[idx] = (byte) (inputByte[idx] & maskByte[idx]);
+		}
+		
+		return Translator.ipToString(masking);
 	}
 
 	@Override

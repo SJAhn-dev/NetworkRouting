@@ -1,13 +1,7 @@
 package Routing;
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
-
 import java.util.Hashtable;
-import java.util.Map.Entry;
 
 public class ARPLayer implements BaseLayer{
 	public int nUpperLayerCount = 0;
@@ -18,30 +12,28 @@ public class ARPLayer implements BaseLayer{
 	_ARP_HEADER m_sHeader;
 	
 	// ARP Cache Table & Proxy Table
-	public Hashtable<String, _ARPCache_Entry> _ARPCache_Table = new Hashtable<>();
-	public Hashtable<String, _Proxy_Entry> _Proxy_Table = new Hashtable<>();
+	public static Hashtable<String, _ARPCache_Entry> _ARPCache_Table = new Hashtable<>();
+	public static Hashtable<String, _Proxy_Entry> _Proxy_Table = new Hashtable<>();
 	
 	// BroadCast Message Mac/IP
 	private final byte[] _BroadCast_Mac = {(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF};
 	private final byte[] _BroadCast_Ip = {(byte) 0x00, (byte)0x00, (byte)0x00, (byte)0x00};
 	
 	// Device's Info
-	public byte[] myIpAddress;
-	public byte[] myMacAddress;
-	public String targetIpInput = new String();
-	public String gratMacInput = new String();
+	public byte[][] myIpAddress;
+	public byte[][] myMacAddress;
 	
 	// ARP Cache Entry
 	// Ip 주소는 Table에서 Key로 가지고 있으므로 Mac Address와 Status, lifeTime만 보유
 	public static class _ARPCache_Entry {
 		byte[] addr;
 		String status;
-		int lifeTime;
+		String arp_interface;
+		String flag;
 		
-		public _ARPCache_Entry(byte[] addr, String status, int lifeTime) {  // boolena status -> string status 수정 
+		public _ARPCache_Entry(byte[] addr, String status) {  // boolena status -> string status 수정 
 			this.addr = addr;
 			this.status = status;
-			this.lifeTime = lifeTime;
 		}
 	}
 	
@@ -65,12 +57,18 @@ public class ARPLayer implements BaseLayer{
 		// super(pName);
 		pLayerName = pName;
 		ResetHeader();
-		try {
-			myIpAddress = getLocalIPAddress();
-			myMacAddress = getLocalMacAddress();
-		} catch (UnknownHostException | SocketException e) {
-			e.printStackTrace();
-		}
+	}
+	
+	public void initAddress() {
+		String port0_mac = NILayer.getMacAddress(0);
+		String port1_mac = NILayer.getMacAddress(1);
+		myMacAddress[0] = Translator.macToByte(port0_mac);
+		myMacAddress[1] = Translator.macToByte(port1_mac);
+		
+		String port0_ip = NILayer.getIpAddress(0);
+		String port1_ip = NILayer.getIpAddress(1);
+		myIpAddress[0] = Translator.macToByte(port0_ip);
+		myIpAddress[1] = Translator.macToByte(port1_ip);
 	}
 	
 	private class _IP_ADDR {
@@ -118,7 +116,6 @@ public class ARPLayer implements BaseLayer{
 			this.srcIp = new _IP_ADDR();			// 4 Bytes / 14 ~ 17
 			this.dstMac = new _ETHERNET_ADDR();		// 6 Bytes / 18 ~ 23
 			this.dstIp = new _IP_ADDR();			// 4 Bytes / 24 ~ 27
-			
 		}
 	}
 	
@@ -142,57 +139,100 @@ public class ARPLayer implements BaseLayer{
 		return buf;
 	}
 	
-	public boolean Send(byte[] input, int length) {
-		
+	public boolean Send(byte[] input, int length, int portNum) {
 		// 먼저 자신이 가지고있는 ARP Cache인지 확인
-		if(containsARP(targetIpInput)) {
-			_ARPCache_Entry tempEntry = _ARPCache_Table.get(targetIpInput);
+		String dstIp = null;
+		String nextHop = null;
+		System.arraycopy(input, 16, dstIp, 0, 4);
+		nextHop = IPLayer.nextHopAddress(dstIp);
+		_ARP_HEADER packet = new _ARP_HEADER();
+		
+		if(containsARP(nextHop)) {
+			_ARPCache_Entry tempEntry = _ARPCache_Table.get(nextHop);
 			
 			if(tempEntry.status.equals("Incomplete")) {	
 				// Incomplete 상태라 Request 보내야하는경우
-				setSrcIp();
-				setSrcMac();
-				setDstIp(ipToByte(targetIpInput));
-				setDstMac(_BroadCast_Mac);
-				setDefaultHeader((byte) 0x01);
-				byte[] _ARP_FRAME = ObjToByte(m_sHeader, input, length);
-				this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length);
+				setSrcIp(packet, portNum);
+				setSrcMac(packet, portNum);
+				setDstIp(packet, Translator.ipToByte(nextHop));
+				setDstMac(packet, _BroadCast_Mac);
+				setDefaultHeader(packet, (byte) 0x01);
+				byte[] _ARP_FRAME = ObjToByte(packet, input, length);
+				this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length, portNum);
 			}
 			else {	
 				// ARP Request 보낼 필요 없는경우
-				this.GetUnderLayer().Send(input, input.length);
+				byte[] _ARP_FRAME = ObjToByte(packet, input, length);
+				this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length, portNum);
 			}
 		}
 		else {
 			// 자신이 가지고있지 않은 ARP Cache면 ARP Request 메세지를 보낸다
-			_ARPCache_Table.put(targetIpInput, new _ARPCache_Entry(new byte[6], "Incomplete", 100));
-			setSrcIp();
-			setSrcMac();
-			setDstIp(ipToByte(targetIpInput));
-			setDstMac(_BroadCast_Mac);
-			setDefaultHeader((byte) 0x01);
-			byte[] _ARP_FRAME = ObjToByte(m_sHeader, input, length);
-			this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length);
+			_ARPCache_Table.put(nextHop, new _ARPCache_Entry(new byte[6], "Incomplete"));
+			setSrcIp(packet, portNum);
+			setSrcMac(packet, portNum);
+			setDstIp(packet, Translator.ipToByte(nextHop));
+			setDstMac(packet, _BroadCast_Mac);
+			setDefaultHeader(packet, (byte) 0x01);
+			byte[] _ARP_FRAME = ObjToByte(packet, input, length);
+			this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length, portNum);
 		}
 		
 		return false;
 	}
 	
+	class arpThread implements Runnable {
+		String nextIp;
+		byte[] input;
+		int length;
+		int portNum;
+		
+		public arpThread(String nextIp, byte[] input, int length, int portNum) {
+			this.nextIp = nextIp;
+			this.input = input;
+			this.length = length;
+			this.portNum = portNum;
+		}
+
+		@Override
+		public void run() {
+			boolean arpConnected = false;
+			byte[] dstMac = null;
+			_ARP_HEADER packet = new _ARP_HEADER();
+			while(!arpConnected) {
+				if(containsARP(nextIp)) {
+					_ARPCache_Entry temp = _ARPCache_Table.get(nextIp);
+					if(temp.status.equals("Complete")) {
+						arpConnected = true;
+						dstMac = temp.addr;
+					}
+				}
+			}
+			setSrcIp(packet, portNum);
+			setSrcMac(packet, portNum);
+			setDstIp(packet, Translator.ipToByte(nextIp));
+			setDstMac(packet, dstMac);
+			setDefaultHeader(packet, (byte) 0x00);
+			byte[] _ARP_FRAME = ObjToByte(packet, input, length);
+			GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length, portNum);
+		}
+	}
+		
 	// Gratuitous Send
-	public boolean gratSend(String input) {
-		byte[] myMac = macToByte(input);
-		setSrcIp();
-		setSrcMac(myMac);
-		setDstIp(_BroadCast_Ip);
-		setDstMac(_BroadCast_Mac);
-		setDefaultHeader((byte) 0x01);
+	public boolean gratSend(String input, int portNum) {
+		byte[] myMac = Translator.macToByte(input);
+		setSrcIp(this.m_sHeader, portNum);
+		setSrcMac(this.m_sHeader,myMac);
+		setDstIp(this.m_sHeader,_BroadCast_Ip);
+		setDstMac(this.m_sHeader,_BroadCast_Mac);
+		setDefaultHeader(this.m_sHeader,(byte) 0x01);
 		byte[] _ARP_FRAME = ObjToByte(m_sHeader, null, 0);
 		this.GetUnderLayer().Send(_ARP_FRAME, _ARP_FRAME.length);
 		
 		return false;
 	}
 	
-	public boolean Receive(byte[] input) {
+	public boolean Receive(byte[] input, int portNum) {
 		byte[] srcIp = new byte[4];
 		byte[] srcMac = new byte[6];
 		byte[] dstIp = new byte[4];
@@ -204,41 +244,40 @@ public class ARPLayer implements BaseLayer{
 		
 		if(input[7] == 0x01) {
 			// input으로 들어온 Message가 ARP Request Message인 경우 혹은 Proxy일경우
-			if(isTargetMe(dstIp) || isItMyProxy(dstIp)) {
-				_ARPCache_Entry entry = new _ARPCache_Entry(srcMac,"Complete", 100);
-				_ARPCache_Table.put(ipToString(srcIp), entry);
-				sendReply(input, input.length);
+			if(isTargetMe(dstIp, portNum) || isItMyProxy(dstIp)) {
+				_ARPCache_Entry entry = new _ARPCache_Entry(srcMac,"Complete");
+				_ARPCache_Table.put(Translator.ipToString(srcIp), entry);
+				sendReply(input, input.length, portNum);
 			}
 			// ARP Request가 자신과 상관없는 Broadcast or Gratuitous인 경우
 			else {
-				if(_ARPCache_Table.containsKey(ipToString(srcIp))) {
-					_ARPCache_Entry entry = _ARPCache_Table.get(ipToString(srcIp));
+				if(_ARPCache_Table.containsKey(Translator.ipToString(srcIp))) {
+					_ARPCache_Entry entry = _ARPCache_Table.get(Translator.ipToString(srcIp));
 					System.arraycopy(srcMac, 0, entry.addr, 0, 6);
 				}
-				else if(!isMyGrat(srcIp) && !containsARP(ipToString(srcIp))) {
-					_ARPCache_Entry entry = new _ARPCache_Entry(srcMac,"Complete", 100);
-					_ARPCache_Table.put(ipToString(srcIp), entry);
+				else if(!isMyGrat(srcIp, portNum) && !containsARP(Translator.ipToString(srcIp))) {
+					_ARPCache_Entry entry = new _ARPCache_Entry(srcMac,"Complete");
+					_ARPCache_Table.put(Translator.ipToString(srcIp), entry);
 				}
 			}
 		}
 		else if(input[7] == 0x02) {
 			// input으로 들어온 Message가 ARP Reply인 경우
-			if(isTargetMe(dstIp)) {
-				_ARPCache_Entry entry = _ARPCache_Table.get(ipToString(srcIp));
+			if(isTargetMe(dstIp, portNum)) {
+				_ARPCache_Entry entry = _ARPCache_Table.get(Translator.ipToString(srcIp));
 				entry.addr = srcMac;
 				entry.status = "Complete";
 			}
 		}
-		
 		return false;
 	}
 	
 	// Reply Message를 보내는 함수
-	public void sendReply(byte[] input, int length) {
+	public void sendReply(byte[] input, int length, int portNum) {
 		byte[] buf = new byte[length];
 		System.arraycopy(input, 0, buf, 0, length);
 		for(int idx = 0; idx < 6; idx++) {
-			buf[idx+18] = myMacAddress[idx];
+			buf[idx+18] = myMacAddress[portNum][idx];
 		}
 		byte[] replyBuf = swaping(buf);
 		replyBuf[7] = (byte) 0x02;
@@ -246,9 +285,9 @@ public class ARPLayer implements BaseLayer{
 	}
 	
 	// 자신이 보낸 Grat Message인지 확인하는 함수
-	public boolean isMyGrat(byte[] inputIp) {
+	public boolean isMyGrat(byte[] inputIp, int portNum) {
 		for(int idx = 0; idx < 4; idx++) {
-			if(inputIp[idx] != myIpAddress[idx])
+			if(inputIp[idx] != myIpAddress[portNum][idx])
 				return false;
 		}
 		return true;
@@ -256,24 +295,19 @@ public class ARPLayer implements BaseLayer{
 	
 	// Proxy Table에 Proxy Entry 추가하는 함수
 	public void addProxy(String ipInput, String macInput, String name) {
-		byte[] macAddress = macToByte(macInput);
+		byte[] macAddress = Translator.macToByte(macInput);
 		_Proxy_Entry proxy = new _Proxy_Entry(macAddress, name);
 		_Proxy_Table.put(ipInput, proxy);
 	}
 	
-	// Proxy Table에서 해당 Proxy를 제거하는 함수
-	public void deleteProxy(String ip) {
-		_Proxy_Table.remove(ip);
-	}
-	
 	// ARP Header의 기본값들을 채워주는 함수 + opcode
-	public void setDefaultHeader(byte opcode) {
-		this.m_sHeader.macType[1] = (byte) 0x01;
-		this.m_sHeader.ipType[0] = (byte) 0x80;
-		this.m_sHeader.ipType[1] = (byte) 0x00;
-		this.m_sHeader.ipAddrLen = (byte) 0x04;
-		this.m_sHeader.macAddrLen = (byte) 0x06;
-		this.m_sHeader.opcode[1] = opcode;
+	public void setDefaultHeader(_ARP_HEADER header, byte opcode) {
+		header.macType[1] = (byte) 0x01;
+		header.ipType[0] = (byte) 0x80;
+		header.ipType[1] = (byte) 0x00;
+		header.ipAddrLen = (byte) 0x04;
+		header.macAddrLen = (byte) 0x06;
+		header.opcode[1] = opcode;
 	}
 
 	// ARPCache Table이 ip에 해당되는 Element를 가지고있는지 검사
@@ -293,43 +327,43 @@ public class ARPLayer implements BaseLayer{
 	}
 	
 	// m_sHeader의 mac Address를 본인의 Mac으로 채우는 함수
-	public void setSrcMac() {
+	public void setSrcMac(_ARP_HEADER header, int portNum) {
 		for(int idx = 0; idx < 6; idx++) {
-			this.m_sHeader.srcMac.addr[idx] = myMacAddress[idx];
+			header.srcMac.addr[idx] = myMacAddress[portNum][idx];
 		}
 	}
 	
-	public void setSrcMac(byte[] input) {
+	public void setSrcMac(_ARP_HEADER header, byte[] input) {
 		for(int idx = 0; idx < 6; idx++) {
-			this.m_sHeader.srcMac.addr[idx] = input[idx];
+			header.srcMac.addr[idx] = input[idx];
 		}
 	}
 	
 	// m_sHeader의 ip Address를 본인의 IP로 채우는 함수
-	public void setSrcIp() {
+	public void setSrcIp(_ARP_HEADER header, int portNum) {
 		for(int idx = 0; idx < 4; idx++) {
-			this.m_sHeader.srcIp.addr[idx] = myIpAddress[idx];
+			header.srcIp.addr[idx] = myIpAddress[portNum][idx];
 		}
 	}
 	
 	// m_sHeader의 dst ip를 input 값으로 채우는 함수
-	public void setDstIp(byte[] input) {
+	public void setDstIp(_ARP_HEADER header, byte[] input) {
 		 for(int idx = 0; idx < 4; idx++) {
-			 this.m_sHeader.dstIp.addr[idx] = input[idx];
+			 header.dstIp.addr[idx] = input[idx];
 		 }
 	}
 	
 	// m_sHeader의 dst Mac를 input 값으로 채우는 함수
-	public void setDstMac(byte[] input) {
+	public void setDstMac(_ARP_HEADER header, byte[] input) {
 		 for(int idx = 0; idx < 6; idx++) {
-			 this.m_sHeader.dstMac.addr[idx] = input[idx];
+			 header.dstMac.addr[idx] = input[idx];
 		 }
 	}
 		
 	// input으로 받은 IP를 자신의 IP와 비교하는 함수
-	public boolean isTargetMe(byte[] input) {
+	public boolean isTargetMe(byte[] input, int portNum) {
 		for(int idx = 0; idx < 4; idx++) {
-			if(input[idx] != myIpAddress[idx])
+			if(input[idx] != myIpAddress[portNum][idx])
 				return false;
 		}
 		return true;
@@ -357,84 +391,10 @@ public class ARPLayer implements BaseLayer{
 	
 	// 수신한 ARP Message의 Ip주소가 자신이 보유하고 있는 Proxy의 Ip인지 검사하는 함수
 	private boolean isItMyProxy(byte[] input) {
-		if(_Proxy_Table.containsKey(ipToString(input))) 
+		if(_Proxy_Table.containsKey(Translator.ipToString(input))) 
 			return true;
 		
 		return false;
-	}
-
-	// Local Mac Address 가져오는 함수
-	 public byte[] getLocalMacAddress() throws UnknownHostException, SocketException {
-			InetAddress ip;
-
-			ip = InetAddress.getLocalHost();
-			NetworkInterface network = NetworkInterface.getByInetAddress(ip);
-			byte[] mac = network.getHardwareAddress();
-			
-			return mac;
-	 }
-	 
-	 // Local IP Address 가져오는 함수
-	 public byte[] getLocalIPAddress() throws UnknownHostException {
-		 InetAddress local = InetAddress.getLocalHost();
-		 
-		 byte[] ip = local.getAddress();
-		 
-		 return ip;
-	 }
-
-	 
-	 // String Type IP 주소를 Byte로 변환
-	 public byte[] ipToByte(String ip) {
-		 String[] ipBuf = ip.split("[.]");
-		 byte[] buf = new byte[4];
-		 
-		 for(int idx = 0; idx < 4; idx++) {
-			 buf[idx] = (byte) Integer.parseInt(ipBuf[idx]);
-		 }
-		 
-		 return buf;
-	 }
-	 
-	 // String Type Mac 주소를 Byte로 변환
-	 public byte[] macToByte(String mac) {
-		 String[] macBuf = mac.split("-");
-		 byte[] buf = new byte[6];
-		 
-		 
-		 for(int idx = 0; idx < 6; idx++) {
-			 buf[idx] = (byte) (Integer.parseInt(macBuf[idx], 16) & 0xFF);
-		 }
-		 
-		 return buf;
-		 
-	 }
-	 
-	// byte 배열로 된 mac 주소를 String으로 변환하는 함수
-	public String macToString(byte[] mac) {
-		String macString = "";
-			
-		// addr에 가지고 있는 byte 배열의 byte를 가져와 두 자리의
-		// mac Address String으로 변환하여 String에 더함
-
-		for (byte b : mac) {
-			macString += String.format("%02X:", b);
-		}
-			
-		// 마지막에 붙은 ":"는 제거하여 return
-		return macString.substring(0, macString.length() - 1);
-	}
-		
-	public String ipToString(byte[] ip) {
-		String ipAddress = "";
-			
-		// addr에 가지고있는 byte를 가져와 Integer로 변환 후 .을 더함
-		for (byte b : ip) {
-			ipAddress += Integer.toString(b & 0xFF) + ".";
-		}
-			
-		// 마지막에 붙은 "."은 제거하여 return
-		return ipAddress.substring(0, ipAddress.length() - 1);
 	}
 
 	// BaseLayer Function
