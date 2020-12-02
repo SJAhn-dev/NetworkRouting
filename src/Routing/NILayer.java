@@ -2,12 +2,9 @@ package Routing;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.sql.Date;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-import org.jnetpcap.ByteBufferHandler;
 import org.jnetpcap.Pcap;
 import org.jnetpcap.PcapIf;
 import org.jnetpcap.packet.PcapPacket;
@@ -42,12 +39,6 @@ public class NILayer implements BaseLayer {
 		m_AdapterObject.add(Pcap.openLive(m_pAdapterList.get(m_iNumAdapter).getName(), snaplen, flags, timeout, errbuf));
 	}
 	
-	public void InitializeAdapter() {
-		for (int i = 0; i < m_pAdapterList.size(); i++) {
-			SetAdapterNumber(i);
-		}
-	}
-
 	public PcapIf GetAdapterObject(int iIndex) {
 		return m_pAdapterList.get(iIndex);
 	}
@@ -173,7 +164,6 @@ class Receive_Thread implements Runnable {
 					UpperLayer.Receive(data, portNum);
 				}
 			};
-
 			AdapterObject.loop(100000, jpacketHandler, "");
 		}
 	}

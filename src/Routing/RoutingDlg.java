@@ -77,16 +77,21 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 	JButton Proxy_CancelButton;
 		
 	public static void main(String[] args) throws SocketException {
-		m_LayerMgr.AddLayer(new NILayer("NI"));
-		((NILayer) m_LayerMgr.GetLayer("NI")).InitializeAdapter();
-		m_LayerMgr.AddLayer(new EthernetLayer("ETHERNET"));
-		m_LayerMgr.AddLayer(new ARPLayer("ARP"));
-		m_LayerMgr.AddLayer(new IPLayer("IP"));
 		m_LayerMgr.AddLayer(new RoutingDlg("GUI"));
+		m_LayerMgr.AddLayer(new IPLayer("IP"));
+		m_LayerMgr.AddLayer(new ARPLayer("ARP"));
+		m_LayerMgr.AddLayer(new EthernetLayer("ETHERNET"));
+		m_LayerMgr.AddLayer(new NILayer("NI"));
 		
 		m_LayerMgr.ConnectLayers(" NI ( *ETHERNET ( *ARP +IP ( *GUI ) ) )");
 		m_LayerMgr.GetLayer("IP").SetUnderLayer(m_LayerMgr.GetLayer("ARP"));
-		
+		initAddress();
+	}
+	
+	public static void initAddress() {
+		((IPLayer) m_LayerMgr.GetLayer("IP")).initAddress();
+		((ARPLayer) m_LayerMgr.GetLayer("ARP")).initAddress();
+		((EthernetLayer) m_LayerMgr.GetLayer("ETHERNET")).initAddress();
 		String port0_ip = NILayer.getIpAddress(0);
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_ip = NILayer.getIpAddress(1);

@@ -43,7 +43,9 @@ public class EthernetLayer implements BaseLayer {
 		// super(pName);
 		pLayerName = pName;
 		ResetHeader();
-		
+	}
+	
+	public void initAddress() {
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_mac = NILayer.getMacAddress(1);
 		myEnetAddress[0] = Translator.macToByte(port0_mac);

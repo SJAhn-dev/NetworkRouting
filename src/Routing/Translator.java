@@ -14,7 +14,13 @@ public class Translator {
 	 
 	 // String Type Mac 주소를 Byte로 변환
 	 public static byte[] macToByte(String mac) {
-		 String[] macBuf = mac.split("-");
+		 String[] macBuf = null;
+		 if(mac.contains(":")) {
+			 macBuf = mac.split(":");
+		 }
+		 else if(mac.contains("-")) {
+			 macBuf = mac.split("-");
+		 }
 		 byte[] buf = new byte[6];
 		 for(int idx = 0; idx < 6; idx++) {
 			 buf[idx] = (byte) (Integer.parseInt(macBuf[idx], 16) & 0xFF);

@@ -77,7 +77,9 @@ public class IPLayer implements BaseLayer{
 		// super(pName);
 		pLayerName = pName;
 		ResetHeader();
-		
+	}
+	
+	public void initAddress() {
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_mac = NILayer.getMacAddress(1);
 		myMacAddress[0] = Translator.macToByte(port0_mac);
@@ -125,29 +127,31 @@ public class IPLayer implements BaseLayer{
 	
 	public boolean Send(byte[] input, int length, int portNum) {
 		byte[] _IP_FRAME = ObjToByte(m_sHeader, input, input.length);
-		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length);
+		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length, portNum);
 	}
 	
 	public boolean Receive(byte[] input, int length, int portNum) {
 		byte[] dstIp = new byte[4];
 		System.arraycopy(input, 16, dstIp, 0, 4);
-		String dstStr = Translator.ipToString(dstIp);
+		String dstIpStr = Translator.ipToString(dstIp);
 		
 		// Routing Table 탐색
 		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
 			_Routing_Entry temp = _Routing_Table.get(idx);
-			String dstMasking = netMask(dstStr, temp.netmask);
-			String nextHop = null;
+			String dstMasking = netMask(dstIpStr, temp.netmask);
+			String nextAddress = null;
 			
 			// Destionation IP에 Masking한 Ip와 Table의 Ip가 동일한 경우 -> Gateway 존재
 			if(temp.dst.equals(dstMasking)) {
-				if(temp.gateway.equals("Connected"))
-					nextHop = dstStr;
-				else
-					nextHop = temp.gateway;
+				if(temp.flag.equals("U")) {
+					nextAddress = dstIpStr;
+				}
+				else if (temp.flag.equals("UG")) {
+					nextAddress = temp.gateway;
+				}
 			}
 			// 다음 목적지 (nextHop) 찾았을 시 해당 hop와 연결된 gateway로 packet 전송
-			if(nextHop != null) {
+			if(nextAddress != null) {
 				this.GetUnderLayer().Send(input, length, temp.routing_interface);
 				return true;
 			}
@@ -156,7 +160,23 @@ public class IPLayer implements BaseLayer{
 		return false;
 	}
 	
-	public String netMask(String input, String mask) {
+	public static String nextHopAddress(String dst) {
+		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
+			_Routing_Entry temp = _Routing_Table.get(idx);
+			String dstMasking = netMask(dst, temp.netmask);
+			if(temp.dst.equals(dstMasking)) {
+				if(temp.flag.equals("U")) {
+					return dst;
+				}
+				else if (temp.flag.equals("UG")) {
+					return temp.gateway;
+				}
+			}
+		}
+		return null;
+	}
+	
+	public static String netMask(String input, String mask) {
 		byte[] inputByte = Translator.ipToByte(input);
 		byte[] maskByte = Translator.ipToByte(mask);
 		
