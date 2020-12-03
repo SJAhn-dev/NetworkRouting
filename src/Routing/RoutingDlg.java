@@ -7,7 +7,9 @@ import java.awt.event.ActionListener;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Vector;
+
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.table.DefaultTableModel;
@@ -24,7 +26,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	private static LayerManager m_LayerMgr = new LayerManager();
 	
-	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table1;
+	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table;
 	static Hashtable<String, _Proxy_Entry> _Proxy_Table;
 	
 	public static ArrayList<String> portIpList = new ArrayList<>();
@@ -34,9 +36,9 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 	Vector<String> RoutingTableColumns = new Vector<String>();
 	Vector<String> RoutingTableRows = new Vector<String>();
 	
-	DefaultTableModel ARPTableModel;
-	Vector<String> ARPTableColumns = new Vector<String>();
-	Vector<String> ARPTableRows = new Vector<String>();
+	static DefaultTableModel ARPTableModel;
+	static Vector<String> ARPTableColumns = new Vector<String>();
+	static Vector<String> ARPTableRows = new Vector<String>();
 	
 	DefaultTableModel ProxyTableModel;
 	Vector<String> ProxyTableColumns = new Vector<String>();
@@ -86,6 +88,8 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		m_LayerMgr.ConnectLayers(" NI ( *ETHERNET ( *ARP +IP ( *GUI ) ) )");
 		m_LayerMgr.GetLayer("IP").SetUnderLayer(m_LayerMgr.GetLayer("ARP"));
 		initAddress();
+		((NILayer) m_LayerMgr.GetLayer("NI")).SetAdapterNumber(0);
+		((NILayer) m_LayerMgr.GetLayer("NI")).SetAdapterNumber(1);
 	}
 	
 	public static void initAddress() {
@@ -101,17 +105,8 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		portMacList.add(port0_mac);
 		portMacList.add(port1_mac);
 	}
-	
-	public synchronized void updateARPTableRow(String[] input) {
-		ARPTableRows = new Vector<String>();
-		ARPTableRows.addElement(input[0]);
-		ARPTableRows.addElement(input[1]);
-		ARPTableRows.addElement(input[2]);
-		ARPTableRows.addElement(input[3]);
-		ARPTableModel.addRow(ARPTableRows);
-	}
-	
-	public synchronized void updateProxyTableRow(String[] value) {
+		
+	public void addProxyTableRow(String[] value) {
 		ProxyTableRows = new Vector<String>();
 		ProxyTableRows.addElement(value[0]);
 		ProxyTableRows.addElement(value[1]);
@@ -119,7 +114,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		ProxyTableModel.addRow(ProxyTableRows);
 	}
 	
-	public synchronized void updateRoutingTableRow(String[] input) {
+	public synchronized void addRoutingTableRow(String[] input) {
 		RoutingTableRows = new Vector<String>();
 		RoutingTableRows.addElement(input[0]);
 		RoutingTableRows.addElement(input[1]);
@@ -128,6 +123,34 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		RoutingTableRows.addElement(input[4]);
 		RoutingTableRows.addElement(input[5]);
 		RoutingTableModel.addRow(RoutingTableRows);
+	}
+	
+	public synchronized static void addArpCacheToTable(String targetKey, _ARPCache_Entry entry) {
+		int rowCount = ARPTableModel.getRowCount();
+		boolean find = false;
+		int saveidx = 0;
+		for (int idx = 0; idx < rowCount; idx++) {
+			String ipKey = (String) ARPTableModel.getValueAt(idx, 0);
+			if(ipKey.equals(targetKey)) {
+				saveidx = idx;
+				find = true;
+				break;
+			}
+		}
+		if(find) {
+			String macAddress = Translator.macToString(entry.addr);
+			String flag = entry.status;
+			ARPTableModel.setValueAt(macAddress, saveidx, 1);
+			ARPTableModel.setValueAt(flag, saveidx, 3);
+		}
+		else {
+			ARPTableRows = new Vector<String>();
+			ARPTableRows.addElement(targetKey);
+			ARPTableRows.addElement("??:??:??:??:??:??");
+			ARPTableRows.addElement(entry.arp_interface);
+			ARPTableRows.addElement(entry.status);
+			ARPTableModel.addRow(ARPTableRows);
+		}
 	}
 	
 	class buttonEventListener implements ActionListener {
@@ -146,7 +169,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 				int targetIdx = ARPCacheTable.getSelectedRow();
 				String targetKey = (String) ARPTableModel.getValueAt(targetIdx, 0);
 				ARPTableModel.removeRow(targetIdx);
-				_ARPCache_Table1.remove(targetKey);
+				_ARPCache_Table.remove(targetKey);
 			}
 			if (e.getSource() == Main_ProxyAddButton) {
 				ProxyAddFrame();
@@ -169,7 +192,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 				input[4] = Integer.toString(Route_InterfaceComboBox.getSelectedIndex());
 				input[5] = "1";
 				((IPLayer) m_LayerMgr.GetLayer("IP")).addToRoutingTable(input);
-				updateRoutingTableRow(input);
+				addRoutingTableRow(input);
 				Route_RouteAddFrame.dispose();
 			}
 			if (e.getSource() == Route_CancelButton) {
@@ -186,7 +209,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		
 	public RoutingDlg(String pName) throws SocketException {
 		pLayerName = pName;
-		
 		// staticRouting Table
 		RoutingTableColumns.addElement("Destination");
 		RoutingTableColumns.addElement("NetMask");
@@ -352,9 +374,9 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_ContentPane.add(Route_InterfaceLabel);
 		Route_InterfaceComboBox = new JComboBox<>();
 		
-//		List<PcapIf> l = ((NILayer) m_LayerMgr.GetLayer("NI")).m_pAdapterList;
-//		for (int i = 0; i < l.size(); i++)
-//			Route_InterfaceComboBox.addItem(l.get(i).getDescription() + " : " + l.get(i).getName());
+		List<PcapIf> l = ((NILayer) m_LayerMgr.GetLayer("NI")).m_pAdapterList;
+		for (int i = 0; i < l.size(); i++)
+			Route_InterfaceComboBox.addItem(l.get(i).getDescription() + " : " + l.get(i).getName());
 			
 		Route_InterfaceComboBox.setBounds(130, 165, 230, 30);
 		Route_InterfaceComboBox.addActionListener(new buttonEventListener());

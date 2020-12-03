@@ -10,8 +10,8 @@ public class IPLayer implements BaseLayer{
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
 	_IP_HEADER m_sHeader;
-	public byte[][] myIpAddress;
-	public byte[][] myMacAddress;
+	public byte[][] myIpAddress = new byte[2][4];
+	public byte[][] myMacAddress = new byte[2][6];
 	public static ArrayList<_Routing_Entry> _Routing_Table = new ArrayList<>();
 	
 	private class _IP_ADDR {
@@ -87,8 +87,8 @@ public class IPLayer implements BaseLayer{
 		
 		String port0_ip = NILayer.getIpAddress(0);
 		String port1_ip = NILayer.getIpAddress(1);
-		myIpAddress[0] = Translator.macToByte(port0_ip);
-		myIpAddress[1] = Translator.macToByte(port1_ip);
+		myIpAddress[0] = Translator.ipToByte(port0_ip);
+		myIpAddress[1] = Translator.ipToByte(port1_ip);
 	}
 	
 	private byte[] ObjToByte(_IP_HEADER Header, byte[] input, int length) {
@@ -125,15 +125,21 @@ public class IPLayer implements BaseLayer{
 		}
 	}
 	
-	public boolean Send(byte[] input, int length, int portNum) {
+	public synchronized boolean Send(byte[] input, int length, int portNum) {
 		byte[] _IP_FRAME = ObjToByte(m_sHeader, input, input.length);
 		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length, portNum);
 	}
 	
-	public boolean Receive(byte[] input, int length, int portNum) {
+	public synchronized boolean Receive(byte[] input, int portNum) {
+		byte[] srcIp = new byte[4];
 		byte[] dstIp = new byte[4];
+		System.arraycopy(input, 12, srcIp, 0, 4);
 		System.arraycopy(input, 16, dstIp, 0, 4);
 		String dstIpStr = Translator.ipToString(dstIp);
+		String srcIpStr = Translator.ipToString(srcIp);
+		if(dstIpStr.equals("192.168.100.255") || dstIpStr.equals("239.255.255.250")
+				|| srcIpStr.equals("192.168.100.1"))
+			return false;
 		
 		// Routing Table 탐색
 		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
@@ -141,7 +147,6 @@ public class IPLayer implements BaseLayer{
 			String dstMasking = netMask(dstIpStr, temp.netmask);
 			String nextAddress = null;
 			
-			// Destionation IP에 Masking한 Ip와 Table의 Ip가 동일한 경우 -> Gateway 존재
 			if(temp.dst.equals(dstMasking)) {
 				if(temp.flag.equals("U")) {
 					nextAddress = dstIpStr;
@@ -150,9 +155,8 @@ public class IPLayer implements BaseLayer{
 					nextAddress = temp.gateway;
 				}
 			}
-			// 다음 목적지 (nextHop) 찾았을 시 해당 hop와 연결된 gateway로 packet 전송
 			if(nextAddress != null) {
-				this.GetUnderLayer().Send(input, length, temp.routing_interface);
+				this.GetUnderLayer().Send(input, input.length, temp.routing_interface);
 				return true;
 			}
 		}
@@ -165,12 +169,8 @@ public class IPLayer implements BaseLayer{
 			_Routing_Entry temp = _Routing_Table.get(idx);
 			String dstMasking = netMask(dst, temp.netmask);
 			if(temp.dst.equals(dstMasking)) {
-				if(temp.flag.equals("U")) {
-					return dst;
-				}
-				else if (temp.flag.equals("UG")) {
-					return temp.gateway;
-				}
+				if(temp.flag.equals("U")) { return dst; }
+				else if (temp.flag.equals("UG")) { return temp.gateway; }
 			}
 		}
 		return null;
@@ -179,7 +179,6 @@ public class IPLayer implements BaseLayer{
 	public static String netMask(String input, String mask) {
 		byte[] inputByte = Translator.ipToByte(input);
 		byte[] maskByte = Translator.ipToByte(mask);
-		
 		byte[] masking = new byte[4];
 		for(int idx = 0; idx < 4; idx++) {
 			masking[idx] = (byte) (inputByte[idx] & maskByte[idx]);
@@ -228,5 +227,4 @@ public class IPLayer implements BaseLayer{
 		pUULayer.SetUnderLayer(this);
 
 	}
-
 }
