@@ -88,10 +88,12 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		m_LayerMgr.ConnectLayers(" NI ( *ETHERNET ( *ARP +IP ( *GUI ) ) )");
 		m_LayerMgr.GetLayer("IP").SetUnderLayer(m_LayerMgr.GetLayer("ARP"));
 		initAddress();
+		// NILayer AdapterNumber 설정
 		((NILayer) m_LayerMgr.GetLayer("NI")).SetAdapterNumber(0);
 		((NILayer) m_LayerMgr.GetLayer("NI")).SetAdapterNumber(1);
 	}
 	
+	// 각 Layer에서 보유해야할 Ip와 Mac Address를 활성화하는 함수
 	public static void initAddress() {
 		((IPLayer) m_LayerMgr.GetLayer("IP")).initAddress();
 		((ARPLayer) m_LayerMgr.GetLayer("ARP")).initAddress();
@@ -105,7 +107,8 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		portMacList.add(port0_mac);
 		portMacList.add(port1_mac);
 	}
-		
+	
+	// Proxy Table Gui에 새로운 Row를 추가하는 함수
 	public void addProxyTableRow(String[] value) {
 		ProxyTableRows = new Vector<String>();
 		ProxyTableRows.addElement(value[0]);
@@ -114,6 +117,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		ProxyTableModel.addRow(ProxyTableRows);
 	}
 	
+	// Routing Table GUI에 새로운 Row를 추가하는 함수
 	public synchronized void addRoutingTableRow(String[] input) {
 		RoutingTableRows = new Vector<String>();
 		RoutingTableRows.addElement(input[0]);
@@ -125,10 +129,12 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		RoutingTableModel.addRow(RoutingTableRows);
 	}
 	
+	// ARP GUI Table을 업데이트하는 함수
 	public synchronized static void addArpCacheToTable(String targetKey, _ARPCache_Entry entry) {
 		int rowCount = ARPTableModel.getRowCount();
 		boolean find = false;
 		int saveidx = 0;
+		// 현재 Table에 해당하는 Key가 존재하면 find를 True로
 		for (int idx = 0; idx < rowCount; idx++) {
 			String ipKey = (String) ARPTableModel.getValueAt(idx, 0);
 			if(ipKey.equals(targetKey)) {
@@ -138,49 +144,68 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 			}
 		}
 		if(find) {
+			// find가 True면 해당 내용을 업데이트한다
 			String macAddress = Translator.macToString(entry.addr);
 			String flag = entry.status;
 			ARPTableModel.setValueAt(macAddress, saveidx, 1);
 			ARPTableModel.setValueAt(flag, saveidx, 3);
 		}
 		else {
-			ARPTableRows = new Vector<String>();
-			ARPTableRows.addElement(targetKey);
-			ARPTableRows.addElement("??:??:??:??:??:??");
-			ARPTableRows.addElement(entry.arp_interface);
-			ARPTableRows.addElement(entry.status);
-			ARPTableModel.addRow(ARPTableRows);
+			// find가 False면 새로운 Row를 입력한다.
+			if(entry.status.equals("Complete")){
+				ARPTableRows = new Vector<String>();
+				ARPTableRows.addElement(targetKey);
+				ARPTableRows.addElement(Translator.macToString(entry.addr));
+				ARPTableRows.addElement(entry.arp_interface);
+				ARPTableRows.addElement(entry.status);
+				ARPTableModel.addRow(ARPTableRows);
+			} else {
+				ARPTableRows = new Vector<String>();
+				ARPTableRows.addElement(targetKey);
+				ARPTableRows.addElement("??:??:??:??:??:??");
+				ARPTableRows.addElement(entry.arp_interface);
+				ARPTableRows.addElement(entry.status);
+				ARPTableModel.addRow(ARPTableRows);
+			}
+			
 		}
 	}
 	
+	// 각 버튼 Event 설정하는 EventListener
 	class buttonEventListener implements ActionListener {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			if (e.getSource() == Main_RoutingTableAddButton) {
+				// Route Add Frame 호출
 				RouteAddFrame();
 			}
 			if (e.getSource() == Main_RoutingTableDeleteButton) {
+				// Route Delete
 				int targetIdx = StaticRoutingTable.getSelectedRow();
 				String targetKey = (String) RoutingTableModel.getValueAt(targetIdx, 0);
 				RoutingTableModel.removeRow(targetIdx);
 				((IPLayer) m_LayerMgr.GetLayer("IP")).removeEntryFromRoutingTable(targetKey);
 			}
 			if (e.getSource() == Main_ARPDeleteButton) {
+				// ARP Delete
 				int targetIdx = ARPCacheTable.getSelectedRow();
 				String targetKey = (String) ARPTableModel.getValueAt(targetIdx, 0);
 				ARPTableModel.removeRow(targetIdx);
 				_ARPCache_Table.remove(targetKey);
 			}
 			if (e.getSource() == Main_ProxyAddButton) {
+				// Proxy Add
 				ProxyAddFrame();
 			}
 			if (e.getSource() == Main_ProxyDeleteButton) {
+				// Proxy Delete
 				int targetIdx = ProxyTable.getSelectedRow();
 				String targetKey = (String) ProxyTableModel.getValueAt(targetIdx, 0);
 				ProxyTableModel.removeRow(targetIdx);
 				_Proxy_Table.remove(targetKey);
 			}
 			if (e.getSource() == Route_AddButton) {
+				// Route Add -> Routing Table에 입력
 				String[] input = new String[6];
 				input[0] = Route_DstField.getText();
 				input[1] = Route_NetmaskField.getText();
@@ -196,10 +221,11 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 				Route_RouteAddFrame.dispose();
 			}
 			if (e.getSource() == Route_CancelButton) {
+				// Route Add Cancel
 				Route_RouteAddFrame.dispose();
 			}
 			if (e.getSource() == Proxy_AddButton) {
-				
+				// Proxy 동작 x
 			}
 			if (e.getSource() == Proxy_CancelButton) {
 				Proxy_ProxyAddFrame.dispose();
@@ -209,7 +235,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		
 	public RoutingDlg(String pName) throws SocketException {
 		pLayerName = pName;
-		// staticRouting Table
 		RoutingTableColumns.addElement("Destination");
 		RoutingTableColumns.addElement("NetMask");
 		RoutingTableColumns.addElement("Gateway");
@@ -230,7 +255,7 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		ARPTableModel = new DefaultTableModel(ARPTableColumns, 0);
 		ProxyTableModel = new DefaultTableModel(ProxyTableColumns, 0);
 		
-		setTitle("Form1");
+		setTitle("Static Routing Table");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(250, 250, 1100, 500);
 		Main_contentPane = new JPanel();
@@ -265,7 +290,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Main_RoutingTableDeleteButton.addActionListener(new buttonEventListener());
 		staticRoutingPanel.add(Main_RoutingTableDeleteButton);
 		
-		// ARPCache Table
 		JPanel ARPCachePanel = new JPanel();
 		ARPCachePanel.setBorder(new TitledBorder(
 				UIManager.getBorder("TitledBorder.border"), "ARP Cache Table",
@@ -324,7 +348,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_RouteAddFrame.setLayout(null);
 		Route_RouteAddFrame.setVisible(true);
 			
-		// Destination
 		JLabel Route_DstLabel = new JLabel("Destination");
 		Route_DstLabel.setBounds(20, 25, 100, 30);
 		Route_ContentPane.add(Route_DstLabel);
@@ -333,7 +356,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_DstField.setBounds(130, 25, 230, 30);
 		Route_ContentPane.add(Route_DstField);
 			
-		// Network
 		JLabel Route_NetmaskLabel = new JLabel("NetMask");
 		Route_NetmaskLabel.setBounds(20, 60, 100, 30);
 		Route_ContentPane.add(Route_NetmaskLabel);
@@ -342,7 +364,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_NetmaskField.setBounds(130, 60, 230, 30);
 		Route_ContentPane.add(Route_NetmaskField);
 			
-		// Gateway
 		JLabel Route_GatewayLabel = new JLabel("Gateway");
 		Route_GatewayLabel.setBounds(20, 95, 100, 30);
 		Route_ContentPane.add(Route_GatewayLabel);
@@ -351,7 +372,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_GatewayField.setBounds(130, 95, 230, 30);
 		Route_ContentPane.add(Route_GatewayField);
 			
-		// Flag
 		JLabel Route_FlagLabel = new JLabel("Flag");
 		Route_FlagLabel.setBounds(20, 130, 100, 30);
 		Route_ContentPane.add(Route_FlagLabel);
@@ -368,7 +388,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_HostCheckBox.setBounds(260, 130, 55, 30);
 		Route_ContentPane.add(Route_HostCheckBox);
 			
-		// Interface
 		JLabel Route_InterfaceLabel = new JLabel("Interface");
 		Route_InterfaceLabel.setBounds(20, 165, 100, 30);
 		Route_ContentPane.add(Route_InterfaceLabel);
@@ -382,7 +401,6 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Route_InterfaceComboBox.addActionListener(new buttonEventListener());
 		Route_ContentPane.add(Route_InterfaceComboBox);// src address
 		
-		// Buttons
 		Route_AddButton = new JButton("Add");
 		Route_AddButton.setBounds(120, 210, 80, 30);
 		Route_AddButton.addActionListener(new buttonEventListener());
@@ -402,41 +420,28 @@ public class RoutingDlg extends JFrame implements BaseLayer {
 		Proxy_ProxyAddFrame.setLayout(null);
 		Proxy_ProxyAddFrame.setVisible(true);
 			
-		// Destination
 		JLabel Proxy_DstLabel = new JLabel("IP");
 		Proxy_DstLabel.setBounds(20, 25, 100, 30);
 		Proxy_ContentPane.add(Proxy_DstLabel);
-			
 		Proxy_IpAddressField = new JTextField();
 		Proxy_IpAddressField.setBounds(130, 25, 230, 30);
 		Proxy_ContentPane.add(Proxy_IpAddressField);		
 			
-		// Netmask
 		JLabel Proxy_MacAddressLabel = new JLabel("MAC");
 		Proxy_MacAddressLabel.setBounds(20, 60, 100, 30);
 		Proxy_ContentPane.add(Proxy_MacAddressLabel);
-		
 		Proxy_MacAddressField = new JTextField();
 		Proxy_MacAddressField.setBounds(130, 60, 230, 30);
 		Proxy_ContentPane.add(Proxy_MacAddressField);
 		
-		
-		// Interface
 		JLabel Proxy_InterfaceLabel = new JLabel("Interface");
 		Proxy_InterfaceLabel.setBounds(20, 95, 100, 30);
 		Proxy_ContentPane.add(Proxy_InterfaceLabel);
-		
 		Proxy_InterfaceComboBox = new JComboBox<>();
-		
-//		List<PcapIf> l = ((NILayer) m_LayerMgr.GetLayer("NI")).m_pAdapterList;
-//		for (int i = 0; i < l.size(); i++)
-//			Proxy_InterfaceComboBox.addItem(l.get(i).getDescription() + " : " + l.get(i).getName());
-		
 		Proxy_InterfaceComboBox.setBounds(130, 95, 230, 30);
 		Proxy_InterfaceComboBox.addActionListener(new buttonEventListener());
 		Proxy_ContentPane.add(Proxy_InterfaceComboBox);// src address
 		
-		// Buttons
 		Proxy_AddButton = new JButton("Add");
 		Proxy_AddButton.setBounds(120, 210, 80, 30);
 		Proxy_AddButton.addActionListener(new buttonEventListener());

@@ -12,7 +12,9 @@ public class EthernetLayer implements BaseLayer {
 	public BaseLayer p_UnderLayer = null;
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
-	_ETHERNET_HEADER m_sHeader = new _ETHERNET_HEADER(); // ethernet header생성자
+	_ETHERNET_HEADER m_sHeader = new _ETHERNET_HEADER();
+	
+	// ARPCache Table과 자신 혹은 target의 Mac Address 저장하는 변수
 	static byte[][] myEnetAddress = new byte[2][6];
 	static byte[][] targetEnetAddress = new byte[2][6];
 	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table;
@@ -50,6 +52,7 @@ public class EthernetLayer implements BaseLayer {
 		ResetHeader();
 	}
 	
+	// 초기 자신의 mac 주소를 저장하는 함수
 	public void initAddress() {
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_mac = NILayer.getMacAddress(1);
@@ -67,20 +70,18 @@ public class EthernetLayer implements BaseLayer {
 		packet.enet_data = input;
 		
 		if(input[7] == 0x01 || input[7] == 0x02) {
-			// Opcode 0x0001 or 0x0002
+			// Opcode 0x0001 or 0x0002 -> ARP Message
 			packet.enet_type[0] = (byte) 0x08;
 			packet.enet_type[1] = (byte) 0x06;
 			setEthernetHeader(packet, input);
 		}
 		else {
-			// Opcode 0x0000
+			// Opcode 0x0000 -> ICMP Message
 			packet.enet_type[0] = (byte) 0x08;
 			packet.enet_type[1] = (byte) 0x00;
 			byte[] dstIpByte = new byte[4];
-			
 			System.arraycopy(input, 16, dstIpByte, 0, 4);
 			System.arraycopy(targetEnetAddress[portNum], 0, packet.enet_dstaddr.addr, 0, 6);
-			
 			System.arraycopy(myEnetAddress[portNum], 0, packet.enet_srcaddr.addr, 0, 6);
 		}
 		bytes = ObjToByte(packet, input, input.length);
@@ -114,6 +115,7 @@ public class EthernetLayer implements BaseLayer {
 		return true;
 	}
 	
+	// EthernetHeader의 src와 dst addr을 입력하는 함수
 	public void setEthernetHeader(_ETHERNET_HEADER header, byte[] input) {
 		System.arraycopy(input, 8, header.enet_srcaddr.addr, 0, 6);
 		System.arraycopy(input, 18, header.enet_dstaddr.addr, 0, 6);
@@ -145,15 +147,13 @@ public class EthernetLayer implements BaseLayer {
 		}
 		return true;
 	}
-	
+
 	public byte[] ObjToByte(_ETHERNET_HEADER Header, byte[] input, int length) {
 		byte[] buf = new byte[length + 14];
-		
 		System.arraycopy(Header.enet_dstaddr.addr, 0, buf, 0, 6);
 		System.arraycopy(Header.enet_srcaddr.addr, 0, buf, 6, 6);
 		System.arraycopy(Header.enet_type, 0, buf, 12, 2);
 		System.arraycopy(input, 0, buf, 14, length);
-
 		return buf;
 	}
 

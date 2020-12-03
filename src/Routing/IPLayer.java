@@ -79,6 +79,7 @@ public class IPLayer implements BaseLayer{
 		ResetHeader();
 	}
 	
+	// 각 NetworkAdapter의 Port별로 ip와 mac Address 저장
 	public void initAddress() {
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_mac = NILayer.getMacAddress(1);
@@ -125,11 +126,13 @@ public class IPLayer implements BaseLayer{
 		}
 	}
 	
+	// 사용 X
 	public synchronized boolean Send(byte[] input, int length, int portNum) {
 		byte[] _IP_FRAME = ObjToByte(m_sHeader, input, input.length);
 		return this.GetUnderLayer().Send(_IP_FRAME, _IP_FRAME.length, portNum);
 	}
 	
+	// ICMP Packet 수신하는 Receive
 	public synchronized boolean Receive(byte[] input, int portNum) {
 		byte[] srcIp = new byte[4];
 		byte[] dstIp = new byte[4];
@@ -137,6 +140,8 @@ public class IPLayer implements BaseLayer{
 		System.arraycopy(input, 16, dstIp, 0, 4);
 		String dstIpStr = Translator.ipToString(dstIp);
 		String srcIpStr = Translator.ipToString(srcIp);
+		
+		// Network 내에 상관없는 잡음(UDP) 무시하는 함수
 		if(dstIpStr.equals("192.168.100.255") || dstIpStr.equals("239.255.255.250")
 				|| srcIpStr.equals("192.168.100.1"))
 			return false;
@@ -148,9 +153,11 @@ public class IPLayer implements BaseLayer{
 			String nextAddress = null;
 			
 			if(temp.dst.equals(dstMasking)) {
+				// Flag가 U라면 해당 Network와 직접적으로 연결되어있다는 뜻이므로 nextAddress를 ICMP Target으로 설정
 				if(temp.flag.equals("U")) {
 					nextAddress = dstIpStr;
 				}
+				// Flag가 U라면 해당 Network로 가려면 Gateway를 거쳐야하므로 Gateway를 Target으로 설정
 				else if (temp.flag.equals("UG")) {
 					nextAddress = temp.gateway;
 				}
@@ -160,10 +167,10 @@ public class IPLayer implements BaseLayer{
 				return true;
 			}
 		}
-		
 		return false;
 	}
 	
+	// ARP Layer에게 다음 Ip Target을 전달하는 함수
 	public static String nextHopAddress(String dst) {
 		for(int idx = 0; idx < _Routing_Table.size(); idx++) {
 			_Routing_Entry temp = _Routing_Table.get(idx);
@@ -176,6 +183,7 @@ public class IPLayer implements BaseLayer{
 		return null;
 	}
 	
+	// input과 mask를 입력받아 Subnet Masking 실행하는 함수
 	public static String netMask(String input, String mask) {
 		byte[] inputByte = Translator.ipToByte(input);
 		byte[] maskByte = Translator.ipToByte(mask);

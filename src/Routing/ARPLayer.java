@@ -1,8 +1,6 @@
 package Routing;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.Hashtable;
 
 public class ARPLayer implements BaseLayer{
@@ -61,6 +59,7 @@ public class ARPLayer implements BaseLayer{
 		ResetHeader();
 	}
 	
+	// 각 Port의 mac Address와 Ip Address 저장하는 함수
 	public void initAddress() {
 		String port0_mac = NILayer.getMacAddress(0);
 		String port1_mac = NILayer.getMacAddress(1);
@@ -152,6 +151,7 @@ public class ARPLayer implements BaseLayer{
 		_ARP_HEADER packet = new _ARP_HEADER();
 		
 		if(containsARP(nextHop)) {
+			// 
 			_ARPCache_Entry tempEntry = _ARPCache_Table.get(nextHop);
 			if(tempEntry.status.equals("Incomplete")) {	
 				// Incomplete 상태라 Request 보내야하는경우
@@ -165,7 +165,6 @@ public class ARPLayer implements BaseLayer{
 				arpThread thread = new arpThread(nextHop, input, input.length, portNum);
 				Thread obj = new Thread(thread);
 				obj.start();
-				//printARPTable();
 			}
 			else {	
 				// ARP Request 보낼 필요 없는경우
@@ -186,6 +185,7 @@ public class ARPLayer implements BaseLayer{
 			_ARPCache_Entry entry = new _ARPCache_Entry(new byte[6], "Incomplete", Integer.toString(portNum));
 			RoutingDlg.addArpCacheToTable(nextHop, entry);
 			
+			// ARP Message 연결이 될때까지 Thread에 메세지를 올려놓고 대기
 			arpThread thread = new arpThread(nextHop, input, input.length, portNum);
 			Thread obj = new Thread(thread);
 			obj.start();
@@ -194,6 +194,7 @@ public class ARPLayer implements BaseLayer{
 		return false;
 	}
 	
+	// ARP 연결이 될때까지 Send를 대기시키는 Thread
 	class arpThread implements Runnable {
 		String nextIp;
 		byte[] input;
@@ -210,16 +211,15 @@ public class ARPLayer implements BaseLayer{
 
 		@Override
 		public void run() {
-			while(_ARPCache_Table.get(nextIp).status.equals("Incomplete")) {
-				try {
-					Thread.sleep(2);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+			while(true) {
+				// ARP값이 Complete가 되면 Ethernet Layer로 ICMP 메세지를 Send
+				_ARPCache_Entry temp = _ARPCache_Table.get(nextIp);
+				if(temp.status.equals("Complete")){
+					EthernetLayer.targetEnetAddress[portNum] = temp.addr;
+					GetUnderLayer().Send(input, input.length, portNum);
+					break;
 				}
 			}
-			_ARPCache_Entry temp = _ARPCache_Table.get(nextIp);
-			EthernetLayer.targetEnetAddress[portNum] = temp.addr;
-			GetUnderLayer().Send(input, input.length, portNum);
 		}
 	}
 		
@@ -237,16 +237,6 @@ public class ARPLayer implements BaseLayer{
 		return false;
 	}
 	
-	public void printARPTable() {
-		System.out.println("ARP Cache Table -----------");
-		Enumeration<String> arpKeys = _ARPCache_Table.keys();
-		while(arpKeys.hasMoreElements()) {
-			String ipKey = (String) arpKeys.nextElement();
-			_ARPCache_Entry temp = _ARPCache_Table.get(ipKey);
-			System.out.println(ipKey + " " +  Translator.macToString(temp.addr) + " " + temp.arp_interface + " " + temp.status);
-		}
-	}
-	
 	public synchronized boolean Receive(byte[] input, int portNum) {
 		byte[] srcIp = new byte[4];
 		byte[] srcMac = new byte[6];
@@ -257,6 +247,7 @@ public class ARPLayer implements BaseLayer{
 		System.arraycopy(input, 18, dstMac, 0, 6);
 		System.arraycopy(input, 24, dstIp, 0, 4);
 		
+		// 자신의 Address & Network 내부 ARP 잡음 제거
 		if(Translator.ipToString(srcIp).equals(Translator.ipToString(myIpAddress[0])))
 			return false;
 		if(Translator.ipToString(srcIp).equals(Translator.ipToString(myIpAddress[1])))
@@ -295,7 +286,6 @@ public class ARPLayer implements BaseLayer{
 				_ARPCache_Entry entry = _ARPCache_Table.get(Translator.ipToString(srcIp));
 				entry.addr = srcMac;
 				entry.status = "Complete";
-				
 				RoutingDlg.addArpCacheToTable(Translator.ipToString(srcIp), entry);
 			}
 		}
