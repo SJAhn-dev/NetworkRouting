@@ -14,6 +14,7 @@ public class EthernetLayer implements BaseLayer {
 	
 	_ETHERNET_HEADER m_sHeader = new _ETHERNET_HEADER(); // ethernet header생성자
 	static byte[][] myEnetAddress = new byte[2][6];
+	static byte[][] targetEnetAddress = new byte[2][6];
 	static Hashtable<String, _ARPCache_Entry> _ARPCache_Table;
 
 	private class _ETHERNET_ADDR {
@@ -60,7 +61,7 @@ public class EthernetLayer implements BaseLayer {
 		m_sHeader = new _ETHERNET_HEADER();
 	}
 
-	public boolean Send(byte[] input, int length, int portNum) {
+	public synchronized boolean Send(byte[] input, int length, int portNum) {
 		byte[] bytes;
 		_ETHERNET_HEADER packet = new _ETHERNET_HEADER();
 		packet.enet_data = input;
@@ -75,6 +76,12 @@ public class EthernetLayer implements BaseLayer {
 			// Opcode 0x0000
 			packet.enet_type[0] = (byte) 0x08;
 			packet.enet_type[1] = (byte) 0x00;
+			byte[] dstIpByte = new byte[4];
+			
+			System.arraycopy(input, 16, dstIpByte, 0, 4);
+			System.arraycopy(targetEnetAddress[portNum], 0, packet.enet_dstaddr.addr, 0, 6);
+			
+			System.arraycopy(myEnetAddress[portNum], 0, packet.enet_srcaddr.addr, 0, 6);
 		}
 		bytes = ObjToByte(packet, input, input.length);
 		if(this.GetUnderLayer().Send(bytes, bytes.length, portNum))
@@ -83,11 +90,12 @@ public class EthernetLayer implements BaseLayer {
 			return false;
 	}
 	
-	public boolean Receive(byte[] input, int portNum) {
-		byte[] buf;
+	public synchronized boolean Receive(byte[] input, int portNum) {
+		byte[] buf = new byte[input.length - 14];
+		System.arraycopy(input, 14, buf, 0, input.length-14);
 		
 		// Target이 자신도 아니고 BroadCast도 아닌 경우 drop		
-		if(!isTargetMe(input) && !isBroadCast(input)) 
+		if(!isTargetMe(input, portNum) && !isBroadCast(input)) 
 			return false;
 		
 		if (input[12] == 0x08 && input[13] == 0x06) {
@@ -114,24 +122,18 @@ public class EthernetLayer implements BaseLayer {
 	// Ethernet Header를 Packet에서 제거해주는 함수
 	private byte[] removeEthernetHeader(byte[] input, int length) {
 		byte[] buf = new byte[length - 14];
-		
-		for(int idx = 0; idx < length - 14; idx++) {
-			buf[idx] = input[idx + 14];
-		}
-		
+		System.arraycopy(input, 14, buf, 0, length-14);
 		return buf;
-	}	
+	}
 	
 	// Receive한 Packet의 Dst Address가 자신인지 확인하는 함수
-	private boolean isTargetMe(byte[] input) {
-		for(int size = 0; size < myEnetAddress.length; size++) {
-			boolean targetMe = true;
-			for(int idx = 0; idx < 6; idx++) {
-				if(input[idx] != myEnetAddress[size][idx])
-					targetMe = false;
-			}
-			if(targetMe) { return true; }
+	private boolean isTargetMe(byte[] input, int portNum) {
+		boolean targetMe = true;
+		for(int idx = 0; idx < 6; idx++) {
+			if(input[idx] != myEnetAddress[portNum][idx])
+				targetMe = false;
 		}
+		if(targetMe) { return true; }
 		return false;
 	}
 	
