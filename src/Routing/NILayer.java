@@ -32,9 +32,9 @@ public class NILayer implements BaseLayer {
 	}
 
 	public void PacketStartDriver() {
-		int snaplen = 64 * 1024; // Capture all packets, no trucation
-		int flags = Pcap.MODE_PROMISCUOUS; // capture all packets
-		int timeout = 10 * 1000; // 10 seconds in millis
+		int snaplen = 64 * 1024;
+		int flags = Pcap.MODE_PROMISCUOUS;
+		int timeout = 1; // timeout 시간 조정 -> 10000->1ms 단위로 패킷 캡쳐
 		m_AdapterObject.add(Pcap.openLive(m_pAdapterList.get(m_iNumAdapter).getName(), snaplen, flags, timeout, errbuf));
 	}
 	
@@ -61,7 +61,6 @@ public class NILayer implements BaseLayer {
 		String[] rawIpdata = m_pAdapterList.get(portNum).getAddresses().get(0).getAddr().toString().split("\\.");
 		String ipString = rawIpdata[0].substring(7, rawIpdata[0].length()) + "." + rawIpdata[1] + "." + rawIpdata[2] + "."
 				+ rawIpdata[3].substring(0, rawIpdata[3].length() - 1);
-		
 		return ipString;
 	}
 	
@@ -71,9 +70,7 @@ public class NILayer implements BaseLayer {
 		try {
 			macAddress = m_pAdapterList.get(portNum).getHardwareAddress();
 		} catch (IOException e) { e.printStackTrace(); }
-		
 		String macString = Translator.macToString(macAddress);
-		
 		return macString;
 	}
 
@@ -162,7 +159,7 @@ class Receive_Thread implements Runnable {
 					UpperLayer.Receive(data, portNum);
 				}
 			};
-			AdapterObject.loop(100000, jpacketHandler, "");
+			AdapterObject.loop(1, jpacketHandler, "");
 		}
 	}
 }
