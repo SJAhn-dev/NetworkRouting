@@ -1,7 +1,6 @@
 # NetworkRouting
 
-The project uses multiple Virtual Windows Images and aims 
-to ensure that ICMP Packets reach other PCs normally.
+>The project uses multiple Virtual Windows Images and aims to ensure that ICMP Packets reach other PCs normally.
 
 This project uses the TCP/IP Layer protocol, but TCP Layer is not implemented separately. 
 Routing function is handled by IPLayer.
